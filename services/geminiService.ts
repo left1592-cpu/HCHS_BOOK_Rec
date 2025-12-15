@@ -25,7 +25,7 @@ const bookSchema: Schema = {
 
 export const getBookRecommendations = async (userQuery: string, excludeTitles: string[] = []): Promise<Book[]> => {
   try {
-    const apiKey = process.env.API_KEY;
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error("API Key is missing");
     }
