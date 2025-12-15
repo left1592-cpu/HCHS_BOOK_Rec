@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import Header from './components/Header';
+import Header from './components/header';
 import SearchInput from './components/SearchInput';
 import BookList from './components/BookList';
 import { Book, LoadingState } from './types';
