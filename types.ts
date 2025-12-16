@@ -4,6 +4,7 @@ export interface Book {
   description: string;
   academicRelevance: string; // How this book helps with college admissions/reports
   category: string;
+  coverUrl?: string; // Optional: URL from external API
 }
 
 export interface RecommendationResponse {

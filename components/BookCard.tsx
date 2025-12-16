@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Book } from '../types';
-import { BookOpenText, Quote, User, ImageOff } from 'lucide-react';
+import { Quote, User, ImageOff } from 'lucide-react';
 
 interface BookCardProps {
   book: Book;
@@ -8,26 +8,30 @@ interface BookCardProps {
 }
 
 const BookCard: React.FC<BookCardProps> = ({ book, index }) => {
-  const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const [imageLoading, setImageLoading] = useState(true);
+  const [coverUrl, setCoverUrl] = useState<string | null>(book.coverUrl || null);
+  const [imageLoading, setImageLoading] = useState(!book.coverUrl);
 
   useEffect(() => {
+    // If we already have a URL from the service (API), don't fetch again.
+    if (book.coverUrl) {
+      setCoverUrl(book.coverUrl);
+      setImageLoading(false);
+      return;
+    }
+
+    // Only fetch if no URL is provided (Fallback for MOCK_BOOKS without urls)
     let isMounted = true;
-    
     const fetchCover = async () => {
       setImageLoading(true);
       try {
-        // Use Google Books API to find the book cover
-        const query = encodeURIComponent(`intitle:${book.title}`); // Removed inauthor for broader search hit rate
+        const query = encodeURIComponent(`intitle:${book.title}`);
         const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`);
         const data = await response.json();
 
         if (isMounted && data.items && data.items.length > 0) {
           const volumeInfo = data.items[0].volumeInfo;
-          // Prefer high res if available, but thumbnail is standard
           const imageLinks = volumeInfo.imageLinks;
           if (imageLinks) {
-            // Secure URL replacement
             const secureUrl = (imageLinks.thumbnail || imageLinks.smallThumbnail)?.replace('http://', 'https://');
             setCoverUrl(secureUrl);
           }
@@ -44,7 +48,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, index }) => {
     return () => {
       isMounted = false;
     };
-  }, [book.title, book.author]);
+  }, [book.title, book.author, book.coverUrl]);
 
   return (
     <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden flex flex-col md:flex-row hover:shadow-xl transition-shadow duration-300">
@@ -55,6 +59,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, index }) => {
             src={coverUrl} 
             alt={book.title} 
             className="w-full h-full object-cover md:object-contain p-0 md:p-2 transition-opacity duration-500" 
+            onError={() => setCoverUrl(null)} // Fallback if url is broken
           />
         ) : (
           <div className="flex flex-col items-center justify-center text-slate-400 p-4 text-center">
@@ -69,7 +74,7 @@ const BookCard: React.FC<BookCardProps> = ({ book, index }) => {
           </div>
         )}
         
-        {/* Mobile Title Overlay (only if no image or loading) */}
+        {/* Mobile Title Overlay (only if no image) */}
         {!coverUrl && !imageLoading && (
            <div className="absolute inset-0 flex items-center justify-center p-4 text-center md:hidden">
              <span className="text-slate-800 font-bold truncate px-2">{book.title}</span>

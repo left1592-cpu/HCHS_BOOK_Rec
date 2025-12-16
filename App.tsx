@@ -91,7 +91,7 @@ function App() {
         {loadingState === LoadingState.IDLE && (
           <div className="max-w-5xl mx-auto px-4 py-12 text-center text-slate-400">
             <BookOpen className="w-16 h-16 mx-auto mb-4 opacity-20" />
-            <p className="text-lg">키워드 검색 또는 계열 선택을 통해<br/>생기부를 채워줄 도서를 추천받아보세요.</p>
+            <p className="text-lg">계열 선택을 통해<br/>생기부를 채워줄 도서를 추천받아보세요.</p>
           </div>
         )}
 
@@ -111,7 +111,7 @@ function App() {
             함창고등학교 AI 독서 지원 시스템
           </p>
           <p className="text-slate-400 text-xs mt-2">
-            본 서비스는 AI(Google Gemini)를 활용한 추천 결과를 제공합니다.<br/>
+            본 서비스는 교육용 목적으로 제공되는 도서 추천 결과입니다.<br/>
             추천된 도서는 반드시 학교 도서관이나 서점에서 내용을 확인 후 활용하세요.
           </p>
         </div>
