@@ -69,7 +69,7 @@ function App() {
               ))}
             </div>
             <p className="mt-8 text-slate-500 font-medium animate-pulse">
-              함창고 학생을 위한 맞춤형 도서를 분석하고 있습니다...
+              여러 데이터베이스(Google Books, Open Library)에서 적합한 도서를 탐색 중입니다...
             </p>
           </div>
         )}

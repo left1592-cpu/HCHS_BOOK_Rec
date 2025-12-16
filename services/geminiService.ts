@@ -208,17 +208,56 @@ const MOCK_BOOKS: (Book & { keywords: string[] })[] = [
 ];
 
 // ============================================================================
-// EXTERNAL API SERVICE (Google Books)
+// DATA SOURCE HELPERS
 // ============================================================================
 
+// Keyword translation for Open Library (English based)
+const KEYWORD_MAP: Record<string, string> = {
+  "컴퓨터": "computer science",
+  "소프트웨어": "software engineering",
+  "물리학": "physics",
+  "경영": "business",
+  "경제": "economics",
+  "철학": "philosophy",
+  "역사": "history",
+  "심리": "psychology",
+  "수학": "mathematics",
+  "의학": "medicine",
+  "간호": "nursing",
+  "교육": "education",
+  "미술": "art",
+  "음악": "music",
+  "건축": "architecture",
+  "정치": "politics",
+  "화학": "chemistry",
+  "생명": "biology",
+  "지구": "earth science",
+  "문학": "literature",
+  "언어": "language",
+  "인공지능": "artificial intelligence",
+  "환경": "environment",
+  "통계": "statistics",
+  "로봇": "robotics",
+  "우주": "space",
+  "윤리": "ethics",
+  "사회": "sociology"
+};
+
+function getEnglishKeywords(query: string): string {
+  let engQuery = "";
+  Object.keys(KEYWORD_MAP).forEach(key => {
+    if (query.includes(key)) {
+      engQuery += KEYWORD_MAP[key] + " ";
+    }
+  });
+  return engQuery.trim();
+}
+
 /**
- * Fetches books from Google Books API to ensure a vast library of results.
- * Since the API doesn't provide 'academicRelevance', we generate a template-based suggestion.
+ * Source 1: Google Books API (Korean focused)
  */
-async function fetchBooksFromAPI(query: string, maxResults: number = 10): Promise<Book[]> {
+async function fetchBooksFromGoogle(query: string, maxResults: number = 20): Promise<Book[]> {
   try {
-    // Improve query relevance for high school students
-    // e.g., if query is "Physics", search for "Physics education" or "Physics general"
     const searchQuery = encodeURIComponent(query);
     const response = await fetch(
       `https://www.googleapis.com/books/v1/volumes?q=${searchQuery}&langRestrict=ko&maxResults=${maxResults}&orderBy=relevance`
@@ -237,8 +276,7 @@ async function fetchBooksFromAPI(query: string, maxResults: number = 10): Promis
       
       const categories = info.categories ? info.categories.join(', ') : '일반 교양';
       
-      // Generate Academic Relevance dynamically based on context
-      const generatedRelevance = `[${query}] 분야에 관심 있는 학생에게 추천합니다. 책의 핵심 주제인 '${info.title}' 관련 내용을 교과 학습 목표와 연결하여 심화 탐구 보고서를 작성해보세요. 저자의 관점을 분석하거나 이론을 실제 사례에 적용하는 활동이 생활기록부를 풍성하게 만들어줄 것입니다.`;
+      const generatedRelevance = `[${query}] 분야 도서입니다. '${info.title}'의 핵심 내용을 교과 학습 목표와 연결하여 심화 탐구 보고서를 작성해보세요. 저자의 관점이나 이론을 실제 사례에 적용하는 활동이 생활기록부를 풍성하게 만들어줄 것입니다.`;
 
       return {
         title: info.title,
@@ -251,23 +289,62 @@ async function fetchBooksFromAPI(query: string, maxResults: number = 10): Promis
     });
 
   } catch (error) {
-    console.warn("External book fetch failed:", error);
+    console.warn("Google Books fetch failed:", error);
     return [];
   }
 }
 
+/**
+ * Source 2: Open Library API (Global/Classics focused)
+ */
+async function fetchBooksFromOpenLibrary(query: string): Promise<Book[]> {
+  const engQuery = getEnglishKeywords(query);
+  if (!engQuery) return []; // No English keyword match, skip Open Library
+
+  try {
+    const response = await fetch(`https://openlibrary.org/search.json?q=${encodeURIComponent(engQuery)}&limit=10`);
+    if (!response.ok) return [];
+    
+    const data = await response.json();
+    if (!data.docs) return [];
+
+    return data.docs.map((doc: any) => {
+      const title = doc.title;
+      const author = doc.author_name ? doc.author_name.slice(0, 2).join(', ') : 'Unknown Author';
+      const coverUrl = doc.cover_i ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg` : undefined;
+      const firstSentence = doc.first_sentence?.[0] || "세계적으로 널리 읽히는 해당 분야의 주요 도서입니다.";
+      
+      // Korean Description for English books
+      const description = `[해외 원서/번역서] ${firstSentence} (이 책은 '${engQuery}' 분야의 글로벌 추천 도서입니다.)`;
+      
+      const generatedRelevance = `국제적인 시각을 기르기 위해 '${title}'(원서 또는 번역본)을 참고해보세요. 국내 도서와 비교 분석하거나, 해당 분야의 글로벌 트렌드를 파악하여 영어 교과 세특이나 심화 탐구 활동에 활용하기 좋습니다.`;
+
+      return {
+        title: title,
+        author: author,
+        description: description,
+        category: "해외도서/원서",
+        academicRelevance: generatedRelevance,
+        coverUrl: coverUrl
+      };
+    });
+
+  } catch (error) {
+    console.warn("Open Library fetch failed:", error);
+    return [];
+  }
+}
 
 // ============================================================================
-// MAIN SERVICE LOGIC (HYBRID)
+// MAIN SERVICE LOGIC (MULTI-SOURCE)
 // ============================================================================
 
 export const getBookRecommendations = async (userQuery: string, excludeTitles: string[] = []): Promise<Book[]> => {
   const queryParts = userQuery.toLowerCase().split(' ');
   const normalizedExclude = excludeTitles.map(t => t.replace(/\s+/g, "").toLowerCase());
 
-  // 1. Filter Local Mock Data (High Quality)
+  // 1. Filter Local Mock Data (Highest Quality)
   const localMatches = MOCK_BOOKS.map(book => {
-    // Filter out excludes
     if (normalizedExclude.includes(book.title.replace(/\s+/g, "").toLowerCase())) {
       return { book, score: -1 };
     }
@@ -279,44 +356,48 @@ export const getBookRecommendations = async (userQuery: string, excludeTitles: s
 
     queryParts.forEach(part => {
       if (!part) return;
-      if (bookKeywords.some(k => k.includes(part) || part.includes(k))) score += 10; // Strong keyword match
+      if (bookKeywords.some(k => k.includes(part) || part.includes(k))) score += 10;
       if (bookCategory.includes(part)) score += 5;
       if (bookTitle.includes(part)) score += 3;
     });
     
-    // Add random jitter
     score += Math.random();
-    
     return { book, score };
   })
-  .filter(item => item.score > 2) // Minimum relevance threshold
+  .filter(item => item.score > 2)
   .sort((a, b) => b.score - a.score)
   .map(item => item.book);
 
-  // 2. Fetch from External API (Quantity & Freshness)
-  // Only fetch if we need more books or just to mix in variety
-  let apiBooks: Book[] = [];
+  // 2. Fetch from External APIs in Parallel
+  let externalBooks: Book[] = [];
+  
   try {
-    // If local results are few, fetch more. Even if many, fetch a few to show variety.
-    const fetchCount = 10; 
-    apiBooks = await fetchBooksFromAPI(userQuery, fetchCount);
+    const [googleBooks, openLibBooks] = await Promise.all([
+      fetchBooksFromGoogle(userQuery, 20),
+      fetchBooksFromOpenLibrary(userQuery)
+    ]);
+
+    // Combine and deduplicate
+    const rawExternal = [...googleBooks, ...openLibBooks];
     
-    // Filter out duplicates that might be in MOCK_BOOKS or Excluded list
-    apiBooks = apiBooks.filter(apiBook => {
-      const normTitle = apiBook.title.replace(/\s+/g, "").toLowerCase();
+    externalBooks = rawExternal.filter(extBook => {
+      const normTitle = extBook.title.replace(/\s+/g, "").toLowerCase();
       const isExcluded = normalizedExclude.includes(normTitle);
       const isInLocal = MOCK_BOOKS.some(mb => mb.title.replace(/\s+/g, "").toLowerCase() === normTitle);
       return !isExcluded && !isInLocal;
     });
+
   } catch (e) {
-    console.error("API Fetch Error", e);
+    console.error("External Fetch Error", e);
   }
 
-  // 3. Combine Results
-  // Prioritize local matches, then append API matches
-  const combined = [...localMatches, ...apiBooks];
+  // 3. Combine All Results
+  // Structure: [Top 3 Local] + [Mixed External] + [Remaining Local]
+  const topLocal = localMatches.slice(0, 3);
+  const remainingLocal = localMatches.slice(3);
   
-  // Return top results (e.g. 8 items per page load)
-  // If we have absolutely nothing, returning empty array is handled by UI
-  return combined.slice(0, 8);
+  const combined = [...topLocal, ...externalBooks, ...remainingLocal];
+  
+  // Return top results (increased page size to 10)
+  return combined.slice(0, 10);
 };
